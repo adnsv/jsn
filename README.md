@@ -1,5 +1,9 @@
 # JSN
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/adnsv/jsn.svg)](https://pkg.go.dev/github.com/adnsv/jsn)
+[![CI](https://github.com/adnsv/jsn/actions/workflows/ci.yml/badge.svg)](https://github.com/adnsv/jsn/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/adnsv/jsn/branch/main/graph/badge.svg)](https://codecov.io/gh/adnsv/jsn)
+
 A high-performance JSON serialization package for Go. JSN offers both a
 functional-style API and reflection-based marshaling for flexible and efficient
 JSON generation and parsing.
