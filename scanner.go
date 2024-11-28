@@ -269,7 +269,7 @@ func (s *Scanner) parseNumber() (float64, error) {
 		}
 		// After a valid decimal part, another dot is an error
 		if s.skipByte('.') {
-			return 0, ErrUnexpectedToken
+			return 0, ErrInvalidNumber
 		}
 	}
 
@@ -279,6 +279,10 @@ func (s *Scanner) parseNumber() (float64, error) {
 			s.skipByte('-')
 		}
 		if !s.skipDecimalDigits() {
+			return 0, ErrInvalidNumber
+		}
+		// After a valid exponent, another exponent is an error
+		if s.skipByte('e') || s.skipByte('E') {
 			return 0, ErrInvalidNumber
 		}
 	}

@@ -1,9 +1,100 @@
 package jsn
 
 import (
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 )
+
+type errorWriter struct {
+	err error
+}
+
+func (w *errorWriter) Write(p []byte) (n int, err error) {
+	return 0, w.err
+}
+
+func TestDecoratorErrorHandling(t *testing.T) {
+	testErr := fmt.Errorf("test error")
+	tests := []struct {
+		name      string
+		writer    io.Writer
+		input     any
+		wantError error
+	}{
+		{
+			name:      "writer error on string",
+			writer:    &errorWriter{err: testErr},
+			input:     "test",
+			wantError: testErr,
+		},
+		{
+			name:      "writer error on number",
+			writer:    &errorWriter{err: testErr},
+			input:     42,
+			wantError: testErr,
+		},
+		{
+			name:      "writer error on bool",
+			writer:    &errorWriter{err: testErr},
+			input:     true,
+			wantError: testErr,
+		},
+		{
+			name:      "writer error on null",
+			writer:    &errorWriter{err: testErr},
+			input:     nil,
+			wantError: testErr,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := decorator{out: tt.writer}
+			d.marshalValue(tt.input)
+			if d.err != tt.wantError {
+				t.Errorf("decorator error = %v, want %v", d.err, tt.wantError)
+			}
+		})
+	}
+}
+
+func TestMarshalerErrors(t *testing.T) {
+	testErr := fmt.Errorf("test marshaler error")
+	tests := []struct {
+		name      string
+		input     any
+		wantError error
+	}{
+		{
+			name:      "StrMarshaler error",
+			input:     errorStrMarshaler{err: testErr},
+			wantError: testErr,
+		},
+		{
+			name:      "ArrMarshaler error",
+			input:     errorArrMarshaler{err: testErr},
+			wantError: testErr,
+		},
+		{
+			name:      "ObjMarshaler error",
+			input:     errorObjMarshaler{err: testErr},
+			wantError: testErr,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sb strings.Builder
+			d := decorator{out: &sb}
+			d.marshalValue(tt.input)
+			if d.err != tt.wantError {
+				t.Errorf("decorator error = %v, want %v", d.err, tt.wantError)
+			}
+		})
+	}
+}
 
 func Test_decorator_scrambleStr(t *testing.T) {
 	tests := []struct {

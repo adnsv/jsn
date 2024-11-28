@@ -341,6 +341,103 @@ func TestReader_DeepMixedNesting(t *testing.T) {
 	})
 }
 
+func TestReadObjectCallbackErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr error
+	}{
+		{
+			name:    "invalid object start",
+			input:   "[1,2,3]",
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:    "invalid key type",
+			input:   `{123: "value"}`,
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:    "missing colon",
+			input:   `{"key" "value"}`,
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:    "missing value",
+			input:   `{"key":}`,
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:    "invalid value",
+			input:   `{"key":invalid}`,
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:    "unterminated object",
+			input:   `{"key":"value"`,
+			wantErr: ErrUnexpectedEOF,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScanner([]byte(tt.input))
+			err := ReadObjectCallback(s, func(key string, value any) error {
+				return nil
+			})
+			if err != tt.wantErr {
+				t.Errorf("ReadObjectCallback() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestReadArrayCallbackErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr error
+	}{
+		{
+			name:    "invalid array start",
+			input:   `{"key":"value"}`,
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:    "missing comma",
+			input:   `[1 2]`,
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:    "trailing comma",
+			input:   `[1,]`,
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:    "invalid value",
+			input:   `[invalid]`,
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:    "unterminated array",
+			input:   `[1,2,3`,
+			wantErr: ErrUnexpectedEOF,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScanner([]byte(tt.input))
+			err := ReadArrayCallback(s, func(value any) error {
+				return nil
+			})
+			if err != tt.wantErr {
+				t.Errorf("ReadArrayCallback() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // Data extractedfrom Nicolas Seriot's JSONTestSuite
 // https://github.com/nst/JSONTestSuite
 // Copyright (c) 2016 Nicolas Seriot

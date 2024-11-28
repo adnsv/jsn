@@ -51,6 +51,9 @@ func ReadObjectCallback(s *Scanner, callback func(k string, v any) error) error 
 		}
 
 		s.skipWhitespace()
+		if s.IsEOF() {
+			return ErrUnexpectedEOF
+		}
 		if s.skipByte(',') {
 			continue
 		}

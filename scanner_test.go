@@ -29,7 +29,7 @@ func TestScanner_SkipWhitespace(t *testing.T) {
 	}
 }
 
-func TestScanner_ReadString(t *testing.T) {
+func TestScanner_ParseString(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
@@ -94,7 +94,7 @@ func TestScanner_ReadString(t *testing.T) {
 	}
 }
 
-func TestScanner_ReadNumber(t *testing.T) {
+func TestScanner_ParseNumber(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
@@ -112,7 +112,7 @@ func TestScanner_ReadNumber(t *testing.T) {
 
 		// Invalid numbers
 		{name: "leading zero", input: "01", wantErr: ErrInvalidNumber},
-		{name: "multiple dots", input: "12.34.56", wantErr: ErrUnexpectedToken},
+		{name: "multiple dots", input: "12.34.56", wantErr: ErrInvalidNumber},
 		{name: "trailing dot", input: "123.", wantErr: ErrInvalidNumber},
 		{name: "missing exponent", input: "1e", wantErr: ErrInvalidNumber},
 		{name: "invalid exponent", input: "1e-", wantErr: ErrInvalidNumber},
@@ -122,6 +122,9 @@ func TestScanner_ReadNumber(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := NewScanner([]byte(tt.input))
 			got, err := s.parseNumber()
+			if err == nil {
+				err = s.Finalize()
+			}
 
 			if err != tt.wantErr {
 				t.Errorf("parseNumber() error = %v, want %v", err, tt.wantErr)
@@ -257,4 +260,213 @@ func TestScanner_InvalidOption(t *testing.T) {
 	}()
 
 	NewScanner([]byte("test"), "invalid option")
+}
+
+func TestScannerEdgeCases(t *testing.T) {
+	stringTests := []struct {
+		name    string
+		input   string
+		wantErr error
+	}{
+		{
+			name:    "empty input",
+			input:   "",
+			wantErr: ErrUnexpectedEOF,
+		},
+		{
+			name:    "invalid unicode escape",
+			input:   `"\u123"`, // incomplete unicode escape
+			wantErr: ErrInvalidUnicodeEscape,
+		},
+		{
+			name:    "invalid unicode escape sequence",
+			input:   `"\uXYZW"`,
+			wantErr: ErrInvalidUnicodeEscape,
+		},
+		{
+			name:    "invalid unterminated string",
+			input:   `"hello`,
+			wantErr: ErrInvalidString,
+		},
+		{
+			name:    "invalid escape sequence",
+			input:   `"\x"`,
+			wantErr: ErrInvalidString,
+		},
+	}
+
+	numberTests := []struct {
+		name    string
+		input   string
+		wantErr error
+	}{
+		{
+			name:    "invalid number format",
+			input:   "123.456.789",
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:    "number with multiple exponents",
+			input:   "1e2e3",
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:    "number with invalid exponent",
+			input:   "1e",
+			wantErr: ErrInvalidNumber,
+		},
+	}
+
+	for _, tt := range stringTests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScanner([]byte(tt.input))
+			var err error
+			if s.IsEOF() {
+				err = ErrUnexpectedEOF
+			} else {
+				_, err = s.parseString()
+				if err == nil {
+					err = s.Finalize()
+				}
+			}
+			if err != tt.wantErr {
+				t.Errorf("Scanner string error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+
+	for _, tt := range numberTests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScanner([]byte(tt.input))
+			var err error
+			if s.IsEOF() {
+				err = ErrUnexpectedEOF
+			} else {
+				_, err = s.parseNumber()
+				if err == nil {
+					err = s.Finalize()
+				}
+			}
+			if err != tt.wantErr {
+				t.Errorf("Scanner number error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestScannerFlags(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		flags    ScannerFlag
+		wantByte byte
+	}{
+		{
+			name:     "skip BOM by default",
+			input:    []byte{0xEF, 0xBB, 0xBF, 'a'},
+			flags:    0,
+			wantByte: 'a',
+		},
+		{
+			name:     "do not skip BOM",
+			input:    []byte{0xEF, 0xBB, 0xBF, 'a'},
+			flags:    ScannerFlagDoNotSkipBOM,
+			wantByte: 0xEF,
+		},
+		{
+			name:     "skip whitespace by default",
+			input:    []byte(" \t\n\ra"),
+			flags:    0,
+			wantByte: 'a',
+		},
+		{
+			name:     "do not skip whitespace",
+			input:    []byte(" a"),
+			flags:    ScannerFlagDoNotSkipInitialWhitespace,
+			wantByte: ' ',
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScanner(tt.input, tt.flags)
+			if got := s.peek(); got != tt.wantByte {
+				t.Errorf("Scanner.peek() = %v, want %v", got, tt.wantByte)
+			}
+		})
+	}
+}
+
+func TestScannerNumberParsing(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    float64
+		wantErr error
+	}{
+		{
+			name:  "integer zero",
+			input: "0",
+			want:  0,
+		},
+		{
+			name:  "negative zero",
+			input: "-0",
+			want:  0,
+		},
+		{
+			name:  "decimal zero",
+			input: "0.0",
+			want:  0,
+		},
+		{
+			name:  "exponential zero",
+			input: "0e0",
+			want:  0,
+		},
+		{
+			name:    "leading zeros",
+			input:   "00123",
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:    "negative leading zeros",
+			input:   "-00123",
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:    "multiple decimal points",
+			input:   "123.456.789",
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:    "multiple exponents",
+			input:   "1e2e3",
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:    "invalid exponent",
+			input:   "1e",
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:    "missing exponent value",
+			input:   "1e+",
+			wantErr: ErrInvalidNumber,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScanner([]byte(tt.input))
+			got, err := s.parseNumber()
+			if err != tt.wantErr {
+				t.Errorf("Scanner.parseNumber() error = %v, want %v", err, tt.wantErr)
+				return
+			}
+			if err == nil && got != tt.want {
+				t.Errorf("Scanner.parseNumber() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
