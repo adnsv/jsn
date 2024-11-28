@@ -105,5 +105,5 @@ type UnsupportedTypeError struct {
 }
 
 func (e *UnsupportedTypeError) Error() string {
-	return "jsn: unsupported type: " + e.Type.String()
+	return "unsupported type: " + e.Type.String()
 }
