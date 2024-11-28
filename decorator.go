@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
-	"strings"
 )
 
 // decorator handles the low-level writing of JSON values with proper formatting.
@@ -403,7 +402,3 @@ var (
 	arrMarshalerType  = reflect.TypeOf((*ArrMarshaler)(nil)).Elem()
 	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 )
-
-func NewDecorator() *decorator {
-	return &decorator{out: &strings.Builder{}}
-}
