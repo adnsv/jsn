@@ -1,3 +1,3 @@
 module github.com/adnsv/jsn
 
-go 1.23.3
+go 1.23
