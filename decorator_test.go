@@ -3,6 +3,7 @@ package jsn
 import (
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"testing"
 )
@@ -139,6 +140,74 @@ func Test_decorator_scrambleStr(t *testing.T) {
 			got := sb.String()
 			if got != tt.want {
 				t.Errorf("scrambleStr() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDecoratorErrorCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   any
+		wantErr string
+	}{
+		{
+			name:    "unsupported type - channel",
+			input:   make(chan int),
+			wantErr: "unsupported type: chan int",
+		},
+		{
+			name:    "NaN float64",
+			input:   math.NaN(),
+			wantErr: "unsupported float value: NaN",
+		},
+		{
+			name:    "positive infinity",
+			input:   math.Inf(1),
+			wantErr: "unsupported float value: +Inf",
+		},
+		{
+			name:    "negative infinity",
+			input:   math.Inf(-1),
+			wantErr: "unsupported float value: -Inf",
+		},
+		{
+			name:    "invalid float precision",
+			input:   1.23,
+			wantErr: "invalid float precision: -1",
+		},
+		{
+			name: "map with invalid value",
+			input: map[string]any{
+				"channel": make(chan int),
+			},
+			wantErr: "unsupported type: chan int",
+		},
+		{
+			name: "slice with invalid value",
+			input: []any{
+				make(chan int),
+			},
+			wantErr: "unsupported type: chan int",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var err error
+
+			if tt.name == "invalid float precision" {
+				_, err = Marshal(tt.input, FloatPrecision{Precision: -1})
+			} else {
+				_, err = Marshal(tt.input)
+			}
+
+			if err == nil {
+				t.Error("expected error, got nil")
+				return
+			}
+			if err.Error() != tt.wantErr {
+				t.Errorf("got error %q, want %q", err.Error(), tt.wantErr)
 			}
 		})
 	}

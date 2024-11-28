@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // decorator handles the low-level writing of JSON values with proper formatting.
@@ -50,17 +51,6 @@ func (d *decorator) marshalBool(v bool) {
 	} else {
 		d.put("false")
 	}
-}
-
-func (d *decorator) marshalInt(v int) {
-	d.put(strconv.Itoa(v))
-}
-
-func (d *decorator) marshalFloat32(v float32) {
-	if math.IsInf(float64(v), 0) || math.IsNaN(float64(v)) {
-		d.handleError(fmt.Errorf("unsupported float value: %v", v))
-	}
-	d.put(strconv.FormatFloat(float64(v), 'g', d.floatPrecision, 32))
 }
 
 func (d *decorator) marshalFloat64(v float64) {
@@ -413,3 +403,7 @@ var (
 	arrMarshalerType  = reflect.TypeOf((*ArrMarshaler)(nil)).Elem()
 	textMarshalerType = reflect.TypeOf((*encoding.TextMarshaler)(nil)).Elem()
 )
+
+func NewDecorator() *decorator {
+	return &decorator{out: &strings.Builder{}}
+}

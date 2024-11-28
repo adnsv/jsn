@@ -438,6 +438,186 @@ func TestReadArrayCallbackErrors(t *testing.T) {
 	}
 }
 
+func TestReaderErrorCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		testFn  func(*Scanner) error
+		wantErr error
+	}{
+		{
+			name:  "empty input",
+			input: "",
+			testFn: func(s *Scanner) error {
+				_, err := ReadValue(s)
+				return err
+			},
+			wantErr: ErrUnexpectedEOF,
+		},
+		{
+			name:  "invalid value type",
+			input: "undefined",
+			testFn: func(s *Scanner) error {
+				_, err := ReadValue(s)
+				return err
+			},
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:  "unterminated object",
+			input: `{"key": "value"`,
+			testFn: func(s *Scanner) error {
+				_, err := ReadObject(s)
+				return err
+			},
+			wantErr: ErrUnexpectedEOF,
+		},
+		{
+			name:  "unterminated array",
+			input: `[1, 2, 3`,
+			testFn: func(s *Scanner) error {
+				_, err := ReadArray(s)
+				return err
+			},
+			wantErr: ErrUnexpectedEOF,
+		},
+		{
+			name:  "invalid object key type",
+			input: `{123: "value"}`,
+			testFn: func(s *Scanner) error {
+				_, err := ReadObject(s)
+				return err
+			},
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:  "missing colon in object",
+			input: `{"key" "value"}`,
+			testFn: func(s *Scanner) error {
+				_, err := ReadObject(s)
+				return err
+			},
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:  "trailing comma in array",
+			input: `[1, 2, 3,]`,
+			testFn: func(s *Scanner) error {
+				_, err := ReadArray(s)
+				return err
+			},
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:  "trailing comma in object",
+			input: `{"key": "value",}`,
+			testFn: func(s *Scanner) error {
+				_, err := ReadObject(s)
+				return err
+			},
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:  "invalid number format",
+			input: `[1.2.3]`,
+			testFn: func(s *Scanner) error {
+				_, err := ReadArray(s)
+				return err
+			},
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:  "invalid unicode escape",
+			input: `["\u123g"]`,
+			testFn: func(s *Scanner) error {
+				_, err := ReadArray(s)
+				return err
+			},
+			wantErr: ErrInvalidUnicodeEscape,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScanner([]byte(tt.input))
+			err := tt.testFn(s)
+			if err != tt.wantErr {
+				t.Errorf("got error %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestReaderCallbackErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		testFn  func(*Scanner) error
+		wantErr error
+	}{
+		{
+			name:  "object callback returns error",
+			input: `{"key": "value"}`,
+			testFn: func(s *Scanner) error {
+				customErr := fmt.Errorf("custom object error")
+				return ReadObjectCallback(s, func(key string, value any) error {
+					return customErr
+				})
+			},
+			wantErr: fmt.Errorf("custom object error"),
+		},
+		{
+			name:  "array callback returns error",
+			input: `[1, 2, 3]`,
+			testFn: func(s *Scanner) error {
+				customErr := fmt.Errorf("custom array error")
+				return ReadArrayCallback(s, func(value any) error {
+					return customErr
+				})
+			},
+			wantErr: fmt.Errorf("custom array error"),
+		},
+		{
+			name:  "nested object callback error",
+			input: `{"outer": {"inner": "value"}}`,
+			testFn: func(s *Scanner) error {
+				customErr := fmt.Errorf("nested error")
+				return ReadObjectCallback(s, func(key string, value any) error {
+					if key == "outer" {
+						return customErr
+					}
+					return nil
+				})
+			},
+			wantErr: fmt.Errorf("nested error"),
+		},
+		{
+			name:  "nested array callback error",
+			input: `[1, [2, 3], 4]`,
+			testFn: func(s *Scanner) error {
+				customErr := fmt.Errorf("nested array error")
+				return ReadArrayCallback(s, func(value any) error {
+					if _, ok := value.([]any); ok {
+						return customErr
+					}
+					return nil
+				})
+			},
+			wantErr: fmt.Errorf("nested array error"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScanner([]byte(tt.input))
+			err := tt.testFn(s)
+			if err == nil || err.Error() != tt.wantErr.Error() {
+				t.Errorf("got error %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // Data extractedfrom Nicolas Seriot's JSONTestSuite
 // https://github.com/nst/JSONTestSuite
 // Copyright (c) 2016 Nicolas Seriot

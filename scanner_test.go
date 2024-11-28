@@ -1,6 +1,7 @@
 package jsn
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -466,6 +467,149 @@ func TestScannerNumberParsing(t *testing.T) {
 			}
 			if err == nil && got != tt.want {
 				t.Errorf("Scanner.parseNumber() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestScannerErrorCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		testFn  func(*Scanner) error
+		wantErr error
+	}{
+		{
+			name:  "empty input with next",
+			input: "",
+			testFn: func(s *Scanner) error {
+				if s.next() != 0 {
+					return fmt.Errorf("expected 0 for empty input")
+				}
+				return nil
+			},
+		},
+		{
+			name:  "empty input with peek",
+			input: "",
+			testFn: func(s *Scanner) error {
+				if s.peek() != 0 {
+					return fmt.Errorf("expected 0 for empty input")
+				}
+				return nil
+			},
+		},
+		{
+			name:  "parse string without opening quote",
+			input: "hello",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseString()
+				return err
+			},
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:  "parse string with invalid control character",
+			input: "\"\x01\"",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseString()
+				return err
+			},
+			wantErr: ErrInvalidString,
+		},
+		{
+			name:  "parse string with incomplete escape sequence at end",
+			input: "\"\\",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseString()
+				return err
+			},
+			wantErr: ErrInvalidString,
+		},
+		{
+			name:  "parse string with invalid escape sequence",
+			input: "\"\\z\"",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseString()
+				return err
+			},
+			wantErr: ErrInvalidString,
+		},
+		{
+			name:  "parse number with only minus",
+			input: "-",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseNumber()
+				return err
+			},
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:  "parse number with invalid exponent",
+			input: "1e+",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseNumber()
+				return err
+			},
+			wantErr: ErrInvalidNumber,
+		},
+		{
+			name:  "finalize with extra content",
+			input: "123 456",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseNumber()
+				if err != nil {
+					return err
+				}
+				return s.Finalize()
+			},
+			wantErr: ErrUnexpectedToken,
+		},
+		{
+			name:  "parse huge number causing overflow",
+			input: "1e1000",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseNumber()
+				return err
+			},
+			wantErr: ErrNumericValueOutOfRange,
+		},
+		{
+			name:  "skip sequence beyond EOF",
+			input: "tr",
+			testFn: func(s *Scanner) error {
+				if s.skipSequence([]byte("true")) {
+					return fmt.Errorf("expected skipSequence to return false")
+				}
+				return nil
+			},
+		},
+		{
+			name:  "parse unicode with insufficient digits",
+			input: "\"\\u12\"",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseString()
+				return err
+			},
+			wantErr: ErrInvalidUnicodeEscape,
+		},
+		{
+			name:  "parse unicode with invalid hex digits",
+			input: "\"\\uGGGG\"",
+			testFn: func(s *Scanner) error {
+				_, err := s.parseString()
+				return err
+			},
+			wantErr: ErrInvalidUnicodeEscape,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := NewScanner([]byte(tt.input))
+			err := tt.testFn(s)
+			if err != tt.wantErr {
+				t.Errorf("got error %v, want %v", err, tt.wantErr)
 			}
 		})
 	}
